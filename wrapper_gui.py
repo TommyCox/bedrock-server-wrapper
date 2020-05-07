@@ -1,8 +1,13 @@
+from pathlib import Path
 import tkinter
 from tkinter.scrolledtext import ScrolledText
+from server_controller import BDS_Wrapper as ServerInstance
 
 class GUI(tkinter.Tk):
-	def __init__(self, *args, **kwargs):
+	default_server_dir = "minecraft_server"
+	default_exec_name = "bedrock_server.exe"
+
+	def __init__(self, *args, server_dir = None, exec_name = None, **kwargs):
 		super().__init__(*args, **kwargs)
 
 		self.title('Bedrock Server Wrapper')
@@ -16,8 +21,22 @@ class GUI(tkinter.Tk):
 		self.grid_rowconfigure(2, pad = 5)
 		self.grid_rowconfigure(4, weight = 1)
 
+		self.__make_menu()
 		self.__make_left()
 		self.__make_right()
+
+		self.server_instance = None
+		self.server_dir = self.default_server_dir if server_dir is None else server_dir
+		self.exec_name = self.default_exec_name if exec_name is None else exec_name
+		self.autoscroll_log = True # Might make this setting edit-able later.
+
+	def __make_menu(self):
+		menu = tkinter.Menu(self)
+		self.config(menu=menu)
+
+		file = tkinter.Menu(menu)
+		file.add_command(label="Exit", command=exit)
+		menu.add_cascade(label="File", menu=file)
 
 	def __make_left(self):
 		# Set up left-side GUI elements.
@@ -26,8 +45,9 @@ class GUI(tkinter.Tk):
 		title.grid(row = 0, column = 0)
 
 		# TEMP: Disable button until implemented.
-		button1 = tkinter.Button(self, text = "Start Server", width = 15, height = 5, state = tkinter.DISABLED)
+		button1 = tkinter.Button(self, text = "Start Server", width = 15, height = 5)
 		button1.grid(row = 1, column = 0)
+		button1.config(command=self.start_server)
 
 		# TEMP: Disable button until implemented.
 		button2 = tkinter.Button(self, text = "Backup World", width = 15, height = 5, state = tkinter.DISABLED)
@@ -53,7 +73,7 @@ class GUI(tkinter.Tk):
 		# Set up right-side GUI elements.
 
 		title = tkinter.Label(self, text = "Server Console")
-		title.grid(row = 0, column = 1)
+		title.grid(row = 0, column = 1, sticky = tkinter.W)
 
 		scrollbox = ScrolledText(self, width = 50, height = 30, state = tkinter.DISABLED)
 		scrollbox.grid(row = 1, column = 1, rowspan = 4, columnspan = 2, padx = 5, sticky = tkinter.N+tkinter.S+tkinter.E+tkinter.W)
@@ -76,6 +96,9 @@ class GUI(tkinter.Tk):
 		if not internal:
 			# Extract useful external data.
 			# Ex. Tracking player connections/disconnections.
+			# self.console_thread.join() # Call this when the server outputs the shutdown message to the log?
+
+			#TODO: Add a dict relating regex expressions to their linked functions; match and call here.
 			pass
 		# else:
 		# 	# Check for meta-commands to this program if implemented.
@@ -93,14 +116,23 @@ class GUI(tkinter.Tk):
 		self.input.bind('<Return>', lambda event: self.__send_input(self.input,input_handler,True))
 		self.send_button.configure(command = lambda: self.__send_input(self.alt_input,input_handler,False))
 
+	def start_server(self):
+		if self.server_instance is None or not self.server_instance.is_running():
+			self.server_instance = ServerInstance(Path(self.server_dir) / self.exec_name)
+			self.console_thread = self.server_instance.read_output(output_handler = self.write_console)
+			self.console_thread.start()
+			self.bind_inputs(self.server_instance.write)
+
 	def write_console(self, text, internal = False):
 		self.write_textbox(self.console, text)
 		self.__interpret(text, internal)
 
 	def write_textbox(self, textbox, text):
 		textbox.configure(state = tkinter.NORMAL)
-		textbox.insert(tkinter.INSERT, text)
+		textbox.insert(tkinter.END, text)
 		textbox.configure(state = tkinter.DISABLED)
+		if self.autoscroll_log:
+			textbox.yview(tkinter.END)
 
 if __name__ == "__main__":
 	ui = GUI()
