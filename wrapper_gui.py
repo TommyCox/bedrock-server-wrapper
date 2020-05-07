@@ -16,8 +16,17 @@ class GUI(tkinter.Tk):
 		self.grid_rowconfigure(2, pad = 5)
 		self.grid_rowconfigure(4, weight = 1)
 
+		self.__make_menu()
 		self.__make_left()
 		self.__make_right()
+
+	def __make_menu(self):
+		menu = tkinter.Menu(self)
+		self.config(menu=menu)
+
+		file = tkinter.Menu(menu)
+		file.add_command(label="Exit", command=exit)
+		menu.add_cascade(label="File", menu=file)
 
 	def __make_left(self):
 		# Set up left-side GUI elements.
