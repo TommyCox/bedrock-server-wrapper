@@ -53,7 +53,7 @@ class GUI(tkinter.Tk):
 		# Set up right-side GUI elements.
 
 		title = tkinter.Label(self, text = "Server Console")
-		title.grid(row = 0, column = 1)
+		title.grid(row = 0, column = 1, sticky = tkinter.W)
 
 		scrollbox = ScrolledText(self, width = 50, height = 30, state = tkinter.DISABLED)
 		scrollbox.grid(row = 1, column = 1, rowspan = 4, columnspan = 2, padx = 5, sticky = tkinter.N+tkinter.S+tkinter.E+tkinter.W)
