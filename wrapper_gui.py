@@ -20,6 +20,8 @@ class GUI(tkinter.Tk):
 		self.__make_left()
 		self.__make_right()
 
+		self.autoscroll_log = True # Might make this setting edit-able later.
+
 	def __make_menu(self):
 		menu = tkinter.Menu(self)
 		self.config(menu=menu)
@@ -108,8 +110,10 @@ class GUI(tkinter.Tk):
 
 	def write_textbox(self, textbox, text):
 		textbox.configure(state = tkinter.NORMAL)
-		textbox.insert(tkinter.INSERT, text)
+		textbox.insert(tkinter.END, text)
 		textbox.configure(state = tkinter.DISABLED)
+		if self.autoscroll_log:
+			textbox.yview(tkinter.END)
 
 if __name__ == "__main__":
 	ui = GUI()
