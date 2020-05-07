@@ -33,24 +33,3 @@ class BDS_Wrapper(subprocess.Popen):
 			return True
 		else:
 			return False
-
-
-if __name__ == "__main__":
-	from time import sleep
-	from pathlib import Path
-
-	server_path = Path('bds_test/bedrock_server.exe')
-
-	server = BDS_Wrapper(server_path) # This starts the server.
-
-	reader = server.read_output(output_handler=print)
-	reader.start()
-
-	user_input = input() # Ugly hack to pause until the user does something.
-	while (user_input != "exit"):
-		if not server.write(uzar_input):
-			print("Failed to send command. Is the server still running?")
-		user_input = input()
-
-	server.write("stop")
-	reader.join()
