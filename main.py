@@ -12,7 +12,7 @@ from wrapper_gui import GUI as MakeGUI
 # ---------------------------------------------------------------------------- #
 # Actual Program
 # ---------------------------------------------------------------------------- #
-server_path = Path("bedrock_server.exe")
+server_path = Path("minecraft_server/bedrock_server.exe")
 
 gui = MakeGUI()
 
