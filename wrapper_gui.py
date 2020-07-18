@@ -1,4 +1,5 @@
 from pathlib import Path
+import re
 import tkinter
 from tkinter.scrolledtext import ScrolledText
 from server_controller import BDS_Wrapper as ServerInstance
@@ -30,6 +31,7 @@ class GUI(tkinter.Tk):
 		self.server_dir = self.default_server_dir if server_dir is None else server_dir
 		self.exec_name = self.default_exec_name if exec_name is None else exec_name
 		self.autoscroll_log = True # Might make this setting edit-able later.
+		self.log_pattern = re.compile(R"^(\[\d+\-\d\d\-\d\d \d\d:\d\d:\d\d \w+\])? (?P<message>.+)")
 
 	def __make_menu(self):
 		menu = tkinter.Menu(self)
@@ -98,8 +100,11 @@ class GUI(tkinter.Tk):
 			# Extract useful external data.
 			# Ex. Tracking player connections/disconnections.
 			# self.console_thread.join() # Call this when the server outputs the shutdown message to the log?
-			for listener in self.log_listeners:
-				listener(self, message.strip())
+			# Use regex to strip out timestamps. Consider moving timestamp-handling to listener modules.
+			match = self.log_pattern.match(message)
+			if match:
+				for listener in self.log_listeners:
+					listener(self, match.group("message"))
 
 			#TODO: Add a dict relating regex expressions to their linked functions; match and call here.
 			pass
