@@ -2,6 +2,7 @@ from pathlib import Path
 import tkinter
 from tkinter.scrolledtext import ScrolledText
 from server_controller import BDS_Wrapper as ServerInstance
+from player_list import PlayerList
 
 class GUI(tkinter.Tk):
 	default_server_dir = "minecraft_server"
@@ -29,9 +30,6 @@ class GUI(tkinter.Tk):
 		self.server_dir = self.default_server_dir if server_dir is None else server_dir
 		self.exec_name = self.default_exec_name if exec_name is None else exec_name
 		self.autoscroll_log = True # Might make this setting edit-able later.
-
-		self.log_listeners = set() # Create a set of listening functions.
-		self.log_listeners.add(self.listener_update_players)
 
 	def __make_menu(self):
 		menu = tkinter.Menu(self)
@@ -132,6 +130,9 @@ class GUI(tkinter.Tk):
 			self.console_thread = self.server_instance.read_output(output_handler = self.write_console)
 			self.console_thread.start()
 			self.bind_inputs(self.server_instance.write)
+
+			self.log_listeners = set() # Create a set holding listening functions.
+			self.log_listeners.add(PlayerList()) # Create a new player list and add to listeners.
 
 	def write_console(self, text, from_user = False):
 		self.write_textbox(self.console, text)
