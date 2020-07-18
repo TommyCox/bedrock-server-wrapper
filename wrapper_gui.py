@@ -116,6 +116,11 @@ class GUI(tkinter.Tk):
 		self.input.bind('<Return>', lambda event: self.__send_input(self.input,input_handler,True))
 		self.send_button.configure(command = lambda: self.__send_input(self.alt_input,input_handler,False))
 
+	def clear_textbox(self, textbox):
+		textbox.configure(state = tkinter.NORMAL)
+		textbox.delete("1.0", tkinter.END)
+		textbox.configure(state = tkinter.DISABLED)
+
 	def start_server(self):
 		if self.server_instance is None or not self.server_instance.is_running():
 			self.server_instance = ServerInstance(Path(self.server_dir) / self.exec_name)
