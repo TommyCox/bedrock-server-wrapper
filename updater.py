@@ -80,18 +80,15 @@ class WrapperUpdater(Updater):
         return zipinfo.filename.endswith(self.types_to_update)
 
     def update(self):
-        # Connect to url.
         connection = self.connect()
-
-        # Download files.
+        if connection is None:
+            return False
         with tempfile.TemporaryFile() as newfile:
             connection.download_to(newfile)
-        
-        #TODO: Do version checking, checksums, or whatever here.
-
-        # Extract files to destination directory..
+            #TODO: Do version checking, checksums, or whatever here.
             self.unzip(newfile)
-
+        # Erase pycache.
+        shutil.rmtree(self.destination_dir / "__pycache__")
         return True
 
 if __name__ == "__main__":
