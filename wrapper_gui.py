@@ -95,8 +95,8 @@ class GUI(tkinter.Tk):
 		self.alt_input = input2
 		self.send_button = button
 
-	def __interpret(self, message, internal):
-		if not internal:
+	def __interpret(self, message, from_user):
+		if not from_user:
 			# Extract useful external data.
 			# Ex. Tracking player connections/disconnections.
 			# self.console_thread.join() # Call this when the server outputs the shutdown message to the log?
@@ -113,7 +113,7 @@ class GUI(tkinter.Tk):
 		text = input_source.get()
 		input_handler(text)
 		if echo:
-			self.write_console(text+"\n", internal = True)
+			self.write_console(text+"\n", from_user = True)
 		if clear_input:
 			input_source.delete(0, tkinter.END)
 
@@ -133,9 +133,9 @@ class GUI(tkinter.Tk):
 			self.console_thread.start()
 			self.bind_inputs(self.server_instance.write)
 
-	def write_console(self, text, internal = False):
+	def write_console(self, text, from_user = False):
 		self.write_textbox(self.console, text)
-		self.__interpret(text, internal)
+		self.__interpret(text, from_user)
 
 	def write_textbox(self, textbox, text):
 		textbox.configure(state = tkinter.NORMAL)
