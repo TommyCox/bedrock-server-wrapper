@@ -44,9 +44,6 @@ class WebConnection():
 #     return True
 
 class Updater():
-    def __init__(self):
-        pass
-
     def connect(self):
         try:
             return WebConnection(self.url)
@@ -60,11 +57,15 @@ class Updater():
                 if self.extract_this(zipinfo):
                     zipped.extract(zipinfo, self.destination_dir)
 
+class ServerUpdater(Updater):
+    def __init__(self, server_dir = "minecraft_server", locale = "en-us"):
+        self.destination_dir = Path(server_dir)
+        self.url = f"https://minecraft.net/{locale}/download/server/bedrock"
+        self.types_to_update = (".py")
+
+
 class WrapperUpdater(Updater):
     def __init__(self, branch = "master", repo = "bedrock-server-wrapper"):
-        super().__init__()
-
-
         self.destination_dir = Path.cwd()
         self.repo = repo
         self.branch = branch
