@@ -30,6 +30,9 @@ class GUI(tkinter.Tk):
 		self.exec_name = self.default_exec_name if exec_name is None else exec_name
 		self.autoscroll_log = True # Might make this setting edit-able later.
 
+		self.log_listeners = set() # Create a set of listening functions.
+		self.log_listeners.add(self.listener_update_players)
+
 	def __make_menu(self):
 		menu = tkinter.Menu(self)
 		self.config(menu=menu)
@@ -97,6 +100,8 @@ class GUI(tkinter.Tk):
 			# Extract useful external data.
 			# Ex. Tracking player connections/disconnections.
 			# self.console_thread.join() # Call this when the server outputs the shutdown message to the log?
+			for listener in self.log_listeners:
+				listener(self, message.strip())
 
 			#TODO: Add a dict relating regex expressions to their linked functions; match and call here.
 			pass
