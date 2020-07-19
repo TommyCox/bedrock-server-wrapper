@@ -87,11 +87,22 @@ class ServerUpdater(Updater):
             print(f"Found download link:{match.group(0)}")
             print(f"Version is: {match.group(1)}")
             self.url = match.group(0)
+            new_version = match.group(1)
         else:
             return False
+        version_file_path = self.destination_dir / "server_version.txt"
         if not force:
             # Check version. Stop if already current.
-            pass
+            try:
+                with open(version_file_path, "r") as ver_file:
+                    version = ver_file.read()
+                    if (version == new_version):
+                        print(f"New Version ({new_version}) is the same as Current Version.")
+                    return True
+            except FileNotFoundError:
+                pass
+        with open(version_file_path, "w") as ver_file:
+            ver_file.write(new_version)
         # Connect to download link.
         connection = self.connect()
         if connection is None:
@@ -133,6 +144,6 @@ if __name__ == "__main__":
     print("Test start!")
     # updater = WrapperUpdater()
     # updater.update()
-    updater = ServerUpdater(overwrite_all=True)
+    updater = ServerUpdater()
     updater.update()
     print("Test end!")
