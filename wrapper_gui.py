@@ -96,9 +96,9 @@ class GUI(tkinter.Tk):
 		self.send_button = button
 
 	def __interpret(self, message, from_user):
+		"""Reads input from the server or user and calls listeners."""
 		if not from_user:
-			# Extract useful external data.
-			# Ex. Tracking player connections/disconnections.
+			# Send server messages to listeners.
 			# self.console_thread.join() # Call this when the server outputs the shutdown message to the log?
 			for listener in self.log_listeners:
 				listener(self, message)
@@ -108,6 +108,13 @@ class GUI(tkinter.Tk):
 		# 	pass
 
 	def __send_input(self, input_source, input_handler, clear_input, echo = True):
+		"""Sends input from textbox to input handler function.
+		
+		This function sends text in a textbox (input_source) to a handler
+		function (input_handler) and manages the textbox (clears input if clear_input is set).
+
+		Inputs are echoed to the console unless echo is set to false.
+		"""
 		text = input_source.get()
 		input_handler(text)
 		if echo:
@@ -116,21 +123,26 @@ class GUI(tkinter.Tk):
 			input_source.delete(0, tkinter.END)
 			
 	def add_listener(self, listener):
+		"""Adds a listener to call whenever a server message apperars in the log."""
 		self.log_listeners.add(listener)
 
 	def bind_inputs(self, input_handler):
+		"""Specifies what function should handle user inputs from the command lines."""
 		self.input.bind('<Return>', lambda event: self.__send_input(self.input,input_handler,True))
 		self.send_button.configure(command = lambda: self.__send_input(self.alt_input,input_handler,False))
 
 	def clear_textbox(self, textbox):
+		"""Clears a textbox."""
 		textbox.configure(state = tkinter.NORMAL)
 		textbox.delete("1.0", tkinter.END)
 		textbox.configure(state = tkinter.DISABLED)
 
 	def remove_listener(self, listener):
+		"""Removes a listener that was listening to the log of server messages."""
 		self.log_listeners.remove(listener)
 
 	def start_server(self):
+		"""Starts the minecraft server."""
 		if self.server_instance is None or not self.server_instance.is_running():
 			self.server_instance = ServerInstance(Path(self.server_dir) / self.exec_name)
 			self.console_thread = self.server_instance.read_output(output_handler = self.write_console)
@@ -141,12 +153,18 @@ class GUI(tkinter.Tk):
 			self.add_listener(PlayerList()) # Create a new player list and add to listeners.
 
 	def write_console(self, text, from_user = False):
+		"""Writes a message to console."""
 		self.__interpret(text, from_user)
 		self.write_textbox(self.console, text)
 		if self.autoscroll_log:
 			self.console.yview(tkinter.END)
 
 	def write_textbox(self, textbox, text):
+		"""Writes text to a specified textbox.
+
+		This funtion enables a textbox, writes the selected text to the end,
+		then disables the textbox again.
+		"""
 		textbox.configure(state = tkinter.NORMAL)
 		textbox.insert(tkinter.END, text)
 		textbox.configure(state = tkinter.DISABLED)
