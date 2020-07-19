@@ -137,8 +137,8 @@ class GUI(tkinter.Tk):
 			self.console_thread.start()
 			self.bind_inputs(self.server_instance.write)
 
-			self.log_listeners = set() # Create a set holding listening functions.
-			self.log_listeners.add(PlayerList()) # Create a new player list and add to listeners.
+			self.log_listeners.clear() # Create a set holding listening functions.
+			self.add_listener(PlayerList()) # Create a new player list and add to listeners.
 
 	def write_console(self, text, from_user = False):
 		self.write_textbox(self.console, text)
