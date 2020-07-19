@@ -141,15 +141,15 @@ class GUI(tkinter.Tk):
 			self.add_listener(PlayerList()) # Create a new player list and add to listeners.
 
 	def write_console(self, text, from_user = False):
-		self.write_textbox(self.console, text)
 		self.__interpret(text, from_user)
+		self.write_textbox(self.console, text)
+		if self.autoscroll_log:
+			self.console.yview(tkinter.END)
 
 	def write_textbox(self, textbox, text):
 		textbox.configure(state = tkinter.NORMAL)
 		textbox.insert(tkinter.END, text)
 		textbox.configure(state = tkinter.DISABLED)
-		if self.autoscroll_log:
-			textbox.yview(tkinter.END)
 
 if __name__ == "__main__":
 	ui = GUI()
