@@ -31,7 +31,7 @@ class GUI(tkinter.Tk):
 		self.server_dir = self.default_server_dir if server_dir is None else server_dir
 		self.exec_name = self.default_exec_name if exec_name is None else exec_name
 		self.autoscroll_log = True # Might make this setting edit-able later.
-		self.log_pattern = re.compile(R"^(\[\d+\-\d\d\-\d\d \d\d:\d\d:\d\d \w+\])? (?P<message>.+)")
+		self.log_listeners = set()
 
 	def __make_menu(self):
 		menu = tkinter.Menu(self)
@@ -100,13 +100,8 @@ class GUI(tkinter.Tk):
 			# Extract useful external data.
 			# Ex. Tracking player connections/disconnections.
 			# self.console_thread.join() # Call this when the server outputs the shutdown message to the log?
-			# Use regex to strip out timestamps. Consider moving timestamp-handling to listener modules.
-			match = self.log_pattern.match(message)
-			if match:
-				for listener in self.log_listeners:
-					listener(self, match.group("message"))
-
-			#TODO: Add a dict relating regex expressions to their linked functions; match and call here.
+			for listener in self.log_listeners:
+				listener(self, message)
 			pass
 		# else:
 		# 	# Check for meta-commands to this program if implemented.
@@ -119,6 +114,9 @@ class GUI(tkinter.Tk):
 			self.write_console(text+"\n", from_user = True)
 		if clear_input:
 			input_source.delete(0, tkinter.END)
+			
+	def add_listener(self, listener):
+		self.log_listeners.add(listener)
 
 	def bind_inputs(self, input_handler):
 		self.input.bind('<Return>', lambda event: self.__send_input(self.input,input_handler,True))
@@ -128,6 +126,9 @@ class GUI(tkinter.Tk):
 		textbox.configure(state = tkinter.NORMAL)
 		textbox.delete("1.0", tkinter.END)
 		textbox.configure(state = tkinter.DISABLED)
+
+	def remove_listener(self, listener):
+		self.log_listeners.remove(listener)
 
 	def start_server(self):
 		if self.server_instance is None or not self.server_instance.is_running():
