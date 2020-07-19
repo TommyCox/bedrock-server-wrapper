@@ -1,8 +1,9 @@
 from pathlib import Path
-import os, shutil
+import os, sys, shutil
 import urllib.request
 import hashlib
 import zipfile, tempfile
+import re
 
 class WebConnection():
     def __init__(self, url):
@@ -11,7 +12,6 @@ class WebConnection():
 
     def __access(self):
         self.response = urllib.request.urlopen(self.url)
-        self.read = self.response.read
 
     def download_to(self, file):
         file.write(self.response.read())
@@ -57,12 +57,50 @@ class Updater():
                 if self.extract_this(zipinfo):
                     zipped.extract(zipinfo, self.destination_dir)
 
+# These are files to preserve when updating.
+PROTECTED_SERVER_FILES = ["server.properties"]
+
 class ServerUpdater(Updater):
-    def __init__(self, server_dir = "minecraft_server", locale = "en-us"):
+    def __init__(self, server_dir = "minecraft_server", locale = "en-us", overwrite_all = False):
         self.destination_dir = Path(server_dir)
         self.url = f"https://minecraft.net/{locale}/download/server/bedrock"
-        self.types_to_update = (".py")
+        self.overwrite_all = overwrite_all
 
+    def extract_this(self, zipinfo):
+        # Check for special files that we don't want to overwrite.
+        if not self.overwrite_all:
+            if zipinfo.filename in PROTECTED_SERVER_FILES:
+                return not Path(self.destination_dir, zipinfo.filename).is_file()
+        return True
+
+    def update(self, force = False):
+        # Connect to minecraft.net
+        connection = self.connect()
+        if connection is None:
+            return False
+        #TODO: Read/parse webpage and extract download link.
+        platform = "win" if sys.platform == "win32" else "linux" if sys.platform == "linux" else None
+        assert platform, "Unsupported platform detected."
+        pattern = fR"https://minecraft\.azureedge\.net/bin-{platform}/bedrock-server-([\d\.]+)\.zip"
+        match = re.search(pattern, connection.response.read().decode())
+        if match:
+            print(f"Found download link:{match.group(0)}")
+            print(f"Version is: {match.group(1)}")
+            self.url = match.group(0)
+        else:
+            return False
+        if not force:
+            # Check version. Stop if already current.
+            pass
+        # Connect to download link.
+        connection = self.connect()
+        if connection is None:
+            return False
+        # Download & extract files.
+        with tempfile.TemporaryFile() as newfile:
+            connection.download_to(newfile)
+            self.unzip(newfile)
+        return True
 
 class WrapperUpdater(Updater):
     def __init__(self, branch = "master", repo = "bedrock-server-wrapper"):
@@ -93,6 +131,8 @@ class WrapperUpdater(Updater):
 
 if __name__ == "__main__":
     print("Test start!")
-    updater = WrapperUpdater()
+    # updater = WrapperUpdater()
+    # updater.update()
+    updater = ServerUpdater(overwrite_all=True)
     updater.update()
     print("Test end!")
