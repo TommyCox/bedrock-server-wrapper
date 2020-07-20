@@ -1,9 +1,13 @@
 from pathlib import Path
-import re
+import re, os, sys, time
+from contextlib import contextmanager
+
 import tkinter
 from tkinter.scrolledtext import ScrolledText
+
 from server_controller import BDS_Wrapper as ServerInstance
 from player_list import PlayerList
+from updater import ServerUpdater, WrapperUpdater
 
 class GUI(tkinter.Tk):
 	default_server_dir = "minecraft_server"
@@ -32,15 +36,22 @@ class GUI(tkinter.Tk):
 		self.server_dir = self.default_server_dir if server_dir is None else server_dir
 		self.exec_name = self.default_exec_name if exec_name is None else exec_name
 		self.autoscroll_log = True # Might make this setting edit-able later.
+		
 		self.log_listeners = set()
+		self.make_command_lookup()
 
 	def __make_menu(self):
 		menu = tkinter.Menu(self)
 		self.config(menu=menu)
 
-		file = tkinter.Menu(menu)
-		file.add_command(label="Exit", command=exit)
-		menu.add_cascade(label="File", menu=file)
+		file_menu = tkinter.Menu(menu)
+		file_menu.add_command(label="Exit", command=exit)
+		menu.add_cascade(label="File", menu=file_menu)
+
+		update_menu = tkinter.Menu(menu)
+		update_menu.add_command(label="Update Server", command=self.update_server)
+		update_menu.add_command(label="Update Wrapper", command=self.update_wrapper)
+		menu.add_cascade(label="Update", menu=update_menu)
 
 	def __make_left(self):
 		# Set up left-side GUI elements.
@@ -84,31 +95,30 @@ class GUI(tkinter.Tk):
 
 		input1 = tkinter.Entry(self)
 		input1.grid(row = 5, column = 1, columnspan = 2, padx = 5, pady = 5, sticky = tkinter.W+tkinter.E)
+		input1.bind('<Return>', lambda event: self.__send_input(input1, True))
 
 		input2 = tkinter.Entry(self)
 		input2.grid(row = 6, column = 1, padx = 5, pady = 5, sticky = tkinter.W+tkinter.E)
 
 		button = tkinter.Button(self, text = "SEND", padx = 15)
 		button.grid(row = 6, column = 2)
+		button.configure(command = lambda: self.__send_input(input2,False))
 
 		self.console = scrollbox
-		self.input = input1
-		self.alt_input = input2
-		self.send_button = button
 
-	def __interpret(self, message, from_user):
+	def __output_handler(self, text):
+		self.write_console(text)
+		self.__interpret(text)
+
+	def __interpret(self, message):
 		"""Reads input from the server or user and calls listeners."""
-		if not from_user:
-			# Send server messages to listeners.
-			# self.console_thread.join() # Call this when the server outputs the shutdown message to the log?
-			for listener in self.log_listeners:
-				listener(self, message)
-			pass
-		# else:
-		# 	# Check for meta-commands to this program if implemented.
-		# 	pass
+		# Send server messages to listeners.
+		# self.console_thread.join() # Call this when the server outputs the shutdown message to the log?
+		for listener in self.log_listeners:
+			listener(self, message)
+		pass
 
-	def __send_input(self, input_source, input_handler, clear_input, echo = True):
+	def __send_input(self, input_source, clear_input, echo = True):
 		"""Sends input from textbox to input handler function.
 		
 		This function sends text in a textbox (input_source) to a handler
@@ -117,11 +127,29 @@ class GUI(tkinter.Tk):
 		Inputs are echoed to the console unless echo is set to false.
 		"""
 		text = input_source.get()
-		input_handler(text)
 		if echo:
-			self.write_console(text+"\n", from_user = True)
+			self.write_console(f"[USER] {text}\n")
 		if clear_input:
 			input_source.delete(0, tkinter.END)
+
+		match = self.meta_pattern.match(text)
+		if match:
+			# Interpret as command to wrapper.
+			# Default to help if unknown command.
+			arguments = match.group("arguments").split() if match.group("arguments") else []
+			func = self.wrapper_commands.get(match.group("command"), self.wrapcom_help)
+			try:
+				func(*arguments)
+			except TypeError as error:
+				match = re.match(R".+\(\) takes (\d+) positional arguments? but (\d+) were given", str(error))
+				if match:
+					self.message_user("Incorrect number of arguments were passed.")
+					self.message_user(f"Expected {int(match.group(1)) - 1} but got {int(match.group(2)) - 1}.")
+				else:
+					raise error
+		else:
+			# Interpret as command to server.
+			self.server_input(text)
 			
 	def add_listener(self, listener):
 		"""Adds a listener to call whenever a server message apperars in the log."""
@@ -129,8 +157,7 @@ class GUI(tkinter.Tk):
 
 	def bind_inputs(self, input_handler):
 		"""Specifies what function should handle user inputs from the command lines."""
-		self.input.bind('<Return>', lambda event: self.__send_input(self.input,input_handler,True))
-		self.send_button.configure(command = lambda: self.__send_input(self.alt_input,input_handler,False))
+		self.server_input = input_handler
 
 	def clear_textbox(self, textbox):
 		"""Clears a textbox."""
@@ -142,20 +169,68 @@ class GUI(tkinter.Tk):
 		"""Removes a listener that was listening to the log of server messages."""
 		self.log_listeners.remove(listener)
 
+	def message_user(self, message):
+		"""Displays a message from the wrapper to the user."""
+		text = message.strip()
+		if not (text == ""):
+			self.write_console(f"[WRAPPER] {text}\n")
+
+	def send_input(self, text):
+		"""Sends an input string to the server."""
+		self.server_input(text)
+		self.write_console(f"[AUTOMATED] {text}\n")
+
 	def start_server(self):
 		"""Starts the minecraft server."""
 		if self.server_instance is None or not self.server_instance.is_running():
 			self.server_instance = ServerInstance(Path(self.server_dir) / self.exec_name)
-			self.console_thread = self.server_instance.read_output(output_handler = self.write_console)
+			self.console_thread = self.server_instance.read_output(output_handler = self.__output_handler)
 			self.console_thread.start()
 			self.bind_inputs(self.server_instance.write)
 
 			self.log_listeners.clear() # Create a set holding listening functions.
 			self.add_listener(PlayerList()) # Create a new player list and add to listeners.
 
-	def write_console(self, text, from_user = False):
+	def stop_server(self, wait_for_stop = True):
+		self.message_user("Stopping server.")
+		if self.server_instance and self.server_instance.is_running():
+			self.send_input("stop")
+			if wait_for_stop:
+				while self.server_instance and self.server_instance.is_running():
+					time.sleep(1)
+				self.message_user("Server has stopped.")
+		else:
+			self.message_user("Server was not running.")
+
+	def update_check(self):
+		"""Prints a message to console and returns false if server is running."""
+		if self.server_instance.is_running():
+			self.message_user("Server is running. Please stop it before updating.")
+			return False
+		return True
+
+	def update_server(self):
+		"""Starts a server update."""
+		self.message_user("Starting server update.")
+		if self.update_check():
+			with output_redirector(self.message_user):
+				if ServerUpdater(self.server_dir).update():
+					self.message_user("Server update complete.")
+				else:
+					self.message_user("Server did not update.")
+		else:
+			self.message_user("Server update cancelled.")
+
+	def update_wrapper(self):
+		"""Starts a wrapper update."""
+		if self.update_check():
+			# TODO: Add setting for branch.
+			with output_redirector(self.message_user):
+				WrapperUpdater(branch="master")
+				# TODO: Restart here.
+
+	def write_console(self, text):
 		"""Writes a message to console."""
-		self.__interpret(text, from_user)
 		self.write_textbox(self.console, text)
 		if self.autoscroll_log:
 			self.console.yview(tkinter.END)
@@ -169,6 +244,60 @@ class GUI(tkinter.Tk):
 		textbox.configure(state = tkinter.NORMAL)
 		textbox.insert(tkinter.END, text)
 		textbox.configure(state = tkinter.DISABLED)
+
+	# --------------------------- #
+	# User Commands
+	# --------------------------- #
+
+	def make_command_lookup(self):
+		self.meta_pattern = re.compile(R"^/(?P<command>\S+)\s?(?P<arguments>.+)?")
+		self.wrapper_commands = {
+			"help": self.wrapcom_help,
+			"exit": self.wrapcom_exit,
+			"restart": self.wrapcom_restart
+		}
+
+	def wrapcom_exit(self):
+		"""Stops the server and closes the wrapper program."""
+		self.stop_server()
+		exit()
+
+	def wrapcom_restart(self):
+		"""Stops the server and restarts the wrapper program."""
+		self.stop_server()
+		# Flush any open files here before restarting.
+		os.execv(sys.executable, [sys.executable, __file__] + sys.argv)
+
+	def wrapcom_help(self, *args, **kwargs):
+		"""Displays this help message."""
+		help_message = "This is a help message."
+		help_message += "\n" + "Use the form /command to send commands to the wrapper."
+		help_message += "\n" + "Existing Commands:"
+		# Generate command list using docstrings.
+		for command, func in self.wrapper_commands.items():
+			documentation = func.__doc__ if func.__doc__ else ""
+			delimiter = " - " if not documentation == "" else ""
+			help_message += "\n  " + f"{command}{delimiter}{documentation}"
+		self.message_user(help_message)
+
+@contextmanager
+def output_redirector(output_handler):
+	"""A cool hack to redirect print statements to output_handler.
+
+	WARNING: If output_handler calls print there will be infinite recursion.
+				This includes indirectly calling print through another function.
+	"""
+	class FakeFile():
+		def write(self, string):
+			output_handler(string)
+
+	file_like = FakeFile()
+	old = sys.stdout
+	sys.stdout = file_like
+	try:
+		yield file_like
+	finally:
+		sys.stdout = old
 
 if __name__ == "__main__":
 	ui = GUI()
