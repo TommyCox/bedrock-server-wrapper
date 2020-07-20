@@ -23,6 +23,7 @@ class GUI(tkinter.Tk):
 		self.grid_rowconfigure(2, pad = 5)
 		self.grid_rowconfigure(4, weight = 1)
 
+		self.option_add("*tearOff", tkinter.FALSE)
 		self.__make_menu()
 		self.__make_left()
 		self.__make_right()
