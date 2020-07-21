@@ -117,7 +117,7 @@ class GUI(tkinter.Tk):
 	def __interpret(self, message):
 		"""Reads input from the server or user and calls listeners."""
 		# Send server messages to listeners.
-		for listener in self.log_listeners:
+		for listener in self.log_listeners.copy():
 			listener(self, message)
 		pass
 
