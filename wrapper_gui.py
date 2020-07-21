@@ -1,5 +1,6 @@
 from pathlib import Path
-import re, os, sys, time, subprocess
+import os, sys, shutil
+import re, subprocess
 from contextlib import contextmanager
 
 import tkinter
@@ -8,7 +9,7 @@ from tkinter.scrolledtext import ScrolledText
 from server_controller import BDS_Wrapper as ServerInstance
 from player_list import PlayerList
 from updater import ServerUpdater, WrapperUpdater
-from backup import WorldBackup as BackupListener
+from backup import BackupListener, make_timestamp
 
 class GUI(tkinter.Tk):
 	default_server_dir = "minecraft_server"
@@ -161,13 +162,13 @@ class GUI(tkinter.Tk):
 		"""Specifies what function should handle user inputs from the command lines."""
 		self.server_input = input_handler
 
-	def backup_world(self, backup_location = "backups"):
+	def backup_world(self, backup_location = "backups", add_timestamp = True):
 		POLLING_INTERVAL = 100 # Time in ms.
 		save_path = Path(backup_location)
 		if not os.path.exists(save_path):
 			os.makedirs(save_path)
 		if self.server_instance and self.server_instance.is_running():
-			listener = BackupListener(save_path)
+			listener = BackupListener(save_path, add_timestamp)
 			self.add_listener(listener)
 			self.send_input("save hold")
 			# Backup method:
@@ -191,8 +192,12 @@ class GUI(tkinter.Tk):
 			
 			self.after(POLLING_INTERVAL, query_loop)
 		else:
-			# Do a normal backup.
-			pass
+			worldpath = Path(self.server_dir) / "worlds"
+			with os.scandir(worldpath) as iterator:
+				for entry in iterator:
+					if entry.is_dir():
+						worldname = entry.name
+						shutil.copytree(worldpath / worldname, Path(backup_location) / f"{make_timestamp()} {worldname}")
 
 	def clear_textbox(self, textbox):
 		"""Clears a textbox."""
