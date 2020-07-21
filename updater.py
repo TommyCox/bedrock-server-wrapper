@@ -118,7 +118,7 @@ class WrapperUpdater(Updater):
         self.destination_dir = Path.cwd()
         self.repo = repo
         self.branch = branch
-        self.url = f"https://github.com/{TommyCox}/{repo}/archive/{branch}.zip"
+        self.url = f"https://github.com/{user}/{repo}/archive/{branch}.zip"
         self.types_to_update = (".py")
 
     def extract_this(self, zipinfo):
@@ -142,6 +142,6 @@ class WrapperUpdater(Updater):
 
 if __name__ == "__main__":
     print("Downloading wrapper!")
-    updater = WrapperUpdater()
+    updater = WrapperUpdater(branch="dev-updater")
     updater.update()
     print("Download complete!")
