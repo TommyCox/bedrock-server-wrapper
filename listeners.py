@@ -1,8 +1,12 @@
 import re
 
 class Listener:
-    def __init__(self, pattern, remove_timestamp = True):
-        self.pattern = re.compile(pattern)
+    def __init__(self, pattern_tester, remove_timestamp = True):
+        if isinstance(pattern_tester, str):
+            pattern = re.compile(pattern_tester)
+            self.test_pattern = pattern.match
+        else:
+            self.test_pattern = pattern_tester
         if remove_timestamp:
             self.timestamp_pattern = re.compile(R"^(\[\d+\-\d\d\-\d\d \d\d:\d\d:\d\d \w+\])? (?P<message>.+)")
     
@@ -13,9 +17,9 @@ class Listener:
             if timestamp_match:
                 message = timestamp_match.group("message")
 
-        matches = self.pattern.match(message)
-        if matches:
-            self.handler(gui, matches)
+        result = self.test_pattern(message)
+        if result:
+            self.handler(gui, result)
 
     def handler(self, gui, matches):
         pass
