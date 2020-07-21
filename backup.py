@@ -3,7 +3,7 @@ import os, re, errno
 from datetime import datetime
 from pathlib import Path
 
-class WorldBackup(Listener):
+class BackupListener(Listener):
     def __init__(self, backup_location, add_timestamp=True):
         self.backup_ready = False
         self.finished = False
@@ -16,11 +16,10 @@ class WorldBackup(Listener):
 
     def handler(self, gui, file_list):
         self.backup_ready = True # This is the signal to stop calling save query.
-        time = datetime.now()
-        timestamp = "%Y_%m_%d_%H%M " if self.add_timestamp else ""
+        timestamp = f"{make_timestamp()} " if self.add_timestamp else ""
         for filename, filesize in file_list:
             filepath = Path(gui.server_dir, "worlds") / filename
-            savepath = self.backup_dir / (time.strftime(timestamp) + filename)
+            savepath = self.backup_dir / (timestamp + filename)
             if not os.path.exists(os.path.dirname(savepath)):
                 try:
                     os.makedirs(os.path.dirname(savepath))
@@ -32,3 +31,7 @@ class WorldBackup(Listener):
                     newfile.write(oldfile.read(int(filesize)))
         gui.message_user("Finished backing up files.")
         self.finished = True
+
+
+def make_timestamp():
+    return datetime.now().strftime("%Y_%m_%d_%H%M")
