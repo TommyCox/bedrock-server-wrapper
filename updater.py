@@ -58,10 +58,10 @@ class Updater():
                     zipped.extract(zipinfo, self.destination_dir)
 
 # These are files to preserve when updating.
-PROTECTED_SERVER_FILES = ["server.properties"]
+PROTECTED_SERVER_FILES = ["server.properties", "permissions.json", "whitelist.json"]
 
 class ServerUpdater(Updater):
-    def __init__(self, server_dir = "minecraft_server", locale = "en-us", overwrite_all = False):
+    def __init__(self, server_dir = "minecraft_server", overwrite_all = False, locale = "en-us"):
         self.destination_dir = Path(server_dir)
         self.url = f"https://minecraft.net/{locale}/download/server/bedrock"
         self.overwrite_all = overwrite_all
@@ -78,7 +78,6 @@ class ServerUpdater(Updater):
         connection = self.connect()
         if connection is None:
             return False
-        #TODO: Read/parse webpage and extract download link.
         platform = "win" if sys.platform == "win32" else "linux" if sys.platform == "linux" else None
         assert platform, "Unsupported platform detected."
         pattern = fR"https://minecraft\.azureedge\.net/bin-{platform}/bedrock-server-([\d\.]+)\.zip"
@@ -111,14 +110,15 @@ class ServerUpdater(Updater):
         with tempfile.TemporaryFile() as newfile:
             connection.download_to(newfile)
             self.unzip(newfile)
+        # TODO: Support renaming executable if name was changed?
         return True
 
 class WrapperUpdater(Updater):
-    def __init__(self, branch = "master", repo = "bedrock-server-wrapper"):
+    def __init__(self, branch = "master", repo = "bedrock-server-wrapper", user = "TommyCox"):
         self.destination_dir = Path.cwd()
         self.repo = repo
         self.branch = branch
-        self.url = f"https://github.com/TommyCox/{repo}/archive/{branch}.zip"
+        self.url = f"https://github.com/{TommyCox}/{repo}/archive/{branch}.zip"
         self.types_to_update = (".py")
 
     def extract_this(self, zipinfo):
@@ -141,9 +141,7 @@ class WrapperUpdater(Updater):
         return True
 
 if __name__ == "__main__":
-    print("Test start!")
-    # updater = WrapperUpdater()
-    # updater.update()
-    updater = ServerUpdater()
+    print("Downloading wrapper!")
+    updater = WrapperUpdater()
     updater.update()
-    print("Test end!")
+    print("Download complete!")
