@@ -1,5 +1,5 @@
 from pathlib import Path
-import re, os, sys, time
+import re, os, sys, time, subprocess
 from contextlib import contextmanager
 
 import tkinter
@@ -8,6 +8,7 @@ from tkinter.scrolledtext import ScrolledText
 from server_controller import BDS_Wrapper as ServerInstance
 from player_list import PlayerList
 from updater import ServerUpdater, WrapperUpdater
+from backup import WorldBackup as BackupListener
 
 class GUI(tkinter.Tk):
 	default_server_dir = "minecraft_server"
@@ -39,6 +40,7 @@ class GUI(tkinter.Tk):
 		
 		self.log_listeners = set()
 		self.make_command_lookup()
+		self.protocol("WM_DELETE_WINDOW", self.wrapcom_exit)
 
 	def __make_menu(self):
 		menu = tkinter.Menu(self)
@@ -49,8 +51,8 @@ class GUI(tkinter.Tk):
 		menu.add_cascade(label="File", menu=file_menu)
 
 		update_menu = tkinter.Menu(menu)
-		update_menu.add_command(label="Update Server", command=self.update_server)
-		update_menu.add_command(label="Update Wrapper", command=self.update_wrapper)
+		update_menu.add_command(label="Update Server", command=lambda event: self.wrapcom_update("server"))
+		update_menu.add_command(label="Update Wrapper", command=lambda event: self.wrapcom_update("wrapper"))
 		menu.add_cascade(label="Update", menu=update_menu)
 
 	def __make_left(self):
@@ -65,8 +67,9 @@ class GUI(tkinter.Tk):
 		button1.config(command=self.start_server)
 
 		# TEMP: Disable button until implemented.
-		button2 = tkinter.Button(self, text = "Backup World", width = 15, height = 5, state = tkinter.DISABLED)
+		button2 = tkinter.Button(self, text = "Backup World", width = 15, height = 5)
 		button2.grid(row = 2, column = 0)
+		button2.config(command=self.backup_world)
 
 		title2 = tkinter.Label(self, text = "Players")
 		title2.grid(row = 3, column = 0, sticky = tkinter.N)
@@ -113,7 +116,6 @@ class GUI(tkinter.Tk):
 	def __interpret(self, message):
 		"""Reads input from the server or user and calls listeners."""
 		# Send server messages to listeners.
-		# self.console_thread.join() # Call this when the server outputs the shutdown message to the log?
 		for listener in self.log_listeners:
 			listener(self, message)
 		pass
@@ -159,6 +161,39 @@ class GUI(tkinter.Tk):
 		"""Specifies what function should handle user inputs from the command lines."""
 		self.server_input = input_handler
 
+	def backup_world(self, backup_location = "backups"):
+		POLLING_INTERVAL = 100 # Time in ms.
+		save_path = Path(backup_location)
+		if not os.path.exists(save_path):
+			os.makedirs(save_path)
+		if self.server_instance and self.server_instance.is_running():
+			listener = BackupListener(save_path)
+			self.add_listener(listener)
+			self.send_input("save hold")
+			# Backup method:
+			# Call "save hold".
+			# Repeatedly call "save query" until file list is returned.
+			# Save and truncate files.
+			# Call "save resume".
+			def finish_loop():
+				if listener.finished:
+					self.send_input("save resume")
+					self.remove_listener(listener)
+				else:
+					self.after(POLLING_INTERVAL, finish_loop)
+			
+			def query_loop():
+				self.send_input("save query")
+				if listener.backup_ready:
+					self.after(POLLING_INTERVAL, finish_loop)
+				else:
+					self.after(POLLING_INTERVAL, query_loop)
+			
+			self.after(POLLING_INTERVAL, query_loop)
+		else:
+			# Do a normal backup.
+			pass
+
 	def clear_textbox(self, textbox):
 		"""Clears a textbox."""
 		textbox.configure(state = tkinter.NORMAL)
@@ -191,43 +226,30 @@ class GUI(tkinter.Tk):
 			self.log_listeners.clear() # Create a set holding listening functions.
 			self.add_listener(PlayerList()) # Create a new player list and add to listeners.
 
-	def stop_server(self, wait_for_stop = True):
-		self.message_user("Stopping server.")
+	def stop_server(self, post_stop = None, *args):
+		# This is a really ugly function.
+		MAX_WAIT_DEPTH = 15 # Maximum number of WAIT_INTERVAL to wait.
+		WAIT_INTERVAL = 1000 # In ms.
 		if self.server_instance and self.server_instance.is_running():
+			self.message_user("Stopping server.")
 			self.send_input("stop")
-			if wait_for_stop:
-				while self.server_instance and self.server_instance.is_running():
-					time.sleep(1)
-				self.message_user("Server has stopped.")
-		else:
-			self.message_user("Server was not running.")
 
-	def update_check(self):
-		"""Prints a message to console and returns false if server is running."""
-		if self.server_instance.is_running():
-			self.message_user("Server is running. Please stop it before updating.")
-			return False
-		return True
-
-	def update_server(self):
-		"""Starts a server update."""
-		self.message_user("Starting server update.")
-		if self.update_check():
-			with output_redirector(self.message_user):
-				if ServerUpdater(self.server_dir).update():
-					self.message_user("Server update complete.")
+			def pause(action, depth, *args):
+				if depth > MAX_WAIT_DEPTH:
+					self.message_user("Server did not stop in time. Cancelling action.")
+					return
+				if self.server_instance and self.server_instance.is_running():
+					# Go another level.
+					self.message_user("Waiting for server to stop.")
+					self.after(WAIT_INTERVAL, pause, action, depth + 1, *args)
 				else:
-					self.message_user("Server did not update.")
+					self.message_user("Server stop confirmed.")
+					action(*args)
+			if post_stop:
+				self.after(WAIT_INTERVAL, pause, post_stop, 0, *args)
 		else:
-			self.message_user("Server update cancelled.")
-
-	def update_wrapper(self):
-		"""Starts a wrapper update."""
-		if self.update_check():
-			# TODO: Add setting for branch.
-			with output_redirector(self.message_user):
-				WrapperUpdater(branch="master")
-				# TODO: Restart here.
+			if post_stop:
+				post_stop(*args)
 
 	def write_console(self, text):
 		"""Writes a message to console."""
@@ -254,19 +276,14 @@ class GUI(tkinter.Tk):
 		self.wrapper_commands = {
 			"help": self.wrapcom_help,
 			"exit": self.wrapcom_exit,
-			"restart": self.wrapcom_restart
+			"restart": self.wrapcom_restart,
+			"update": self.wrapcom_update,
+			"viewdir": self.wrapcom_view,
 		}
 
 	def wrapcom_exit(self):
 		"""Stops the server and closes the wrapper program."""
-		self.stop_server()
-		exit()
-
-	def wrapcom_restart(self):
-		"""Stops the server and restarts the wrapper program."""
-		self.stop_server()
-		# Flush any open files here before restarting.
-		os.execv(sys.executable, [sys.executable, __file__] + sys.argv)
+		self.stop_server(post_stop=exit)
 
 	def wrapcom_help(self, *args, **kwargs):
 		"""Displays this help message."""
@@ -279,6 +296,54 @@ class GUI(tkinter.Tk):
 			delimiter = " - " if not documentation == "" else ""
 			help_message += "\n  " + f"{command}{delimiter}{documentation}"
 		self.message_user(help_message)
+
+	def wrapcom_restart(self):
+		"""Stops the server and restarts the wrapper program."""
+		def restart_program():
+			# Flush any open files here before restarting.
+			os.execv(sys.executable, [sys.executable, __file__] + sys.argv)
+		self.stop_server(post_stop=restart_program)
+
+	def wrapcom_update(self, component = "", *args):
+		"""Access updater. Use update help for details."""
+		if component == "server":
+			overwrite = (args[0] == "overwrite") if len(args) >= 1 else False
+			locale = (args[1]) if len(args) >= 2 else "en-us"
+			updater = ServerUpdater(self.server_dir, overwrite, locale)
+		elif component == "wrapper":
+			updater = WrapperUpdater()
+			restart_wrapper = True
+		else:
+			update_help_message = "Gives access to update functions."
+			update_help_message += "\n  " + "update server [keep|overwrite] [locale] - Update the server program."
+			update_help_message += "\n    " + "[keep|overwrite] - Defaults to keep. If set to overwrite, server settings will not be preserved."
+			update_help_message += "\n    " + "[locale] - Locale used to access minecraft website. Defaults to en-us. https://minecraft.net/{locale}/download"
+			update_help_message += "\n  " + "update wrapper [branch] - Update the wrapper program."
+			update_help_message += "\n    " + "[branch] - GitHub branch to use. Defaults to master."
+			self.message_user(update_help_message)
+			return
+		if self.server_instance and self.server_instance.is_running():
+			self.message_user("Server is running. Please stop server before updating.")
+		else:
+			self.message_user(f"Updating {component}.")
+			completed = updater.update()
+			if completed:
+				self.message_user("Update complete.")
+				if restart_wrapper:
+					self.wrapcom_restart()
+			else:
+				self.message_user("Update was not completed.")
+
+	def wrapcom_view(self):
+		"""Opens the folder containing the server."""
+		if sys.platform == "win32":
+			os.startfile(self.server_dir)
+		elif sys.platform == "darwin":
+			subprocess.Popen(["open", self.server_dir])
+		elif sys.platform == "linux":
+			subprocess.Popen(["xdg-open", self.server_dir])
+		else:
+			raise Exception("Unsupported platform.")
 
 @contextmanager
 def output_redirector(output_handler):
