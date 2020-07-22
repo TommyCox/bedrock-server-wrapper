@@ -342,7 +342,8 @@ class GUI(tkinter.Tk):
 			locale = (args[1]) if len(args) >= 2 else "en-us"
 			updater = ServerUpdater(self.server_dir, overwrite, locale)
 		elif component == "wrapper":
-			updater = WrapperUpdater()
+			branch = args[0] if len(args) >= 1 else "master"
+			updater = WrapperUpdater(branch=branch)
 			restart_wrapper = True
 		else:
 			update_help_message = "Gives access to update functions."
