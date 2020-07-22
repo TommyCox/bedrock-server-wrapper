@@ -3,6 +3,7 @@ import os, sys, shutil
 import re, subprocess
 from contextlib import contextmanager
 from threading import Lock
+from inspect import cleandoc
 
 import tkinter
 from tkinter.scrolledtext import ScrolledText
@@ -316,14 +317,20 @@ class GUI(tkinter.Tk):
 		"""Stops the server and closes the wrapper program."""
 		self.stop_server(post_stop=exit)
 
-	def wrapcom_help(self, *args, **kwargs):
+	def wrapcom_help(self, command = None, *args, **kwargs):
 		"""Displays this help message."""
-		help_message = "This is a help message."
-		help_message += "\n" + "Use the form /command to send commands to the wrapper."
+		if command:
+			if self.wrapper_commands.get(command, None):
+				full_doc = cleandoc(self.wrapper_commands[command].__doc__)
+				self.message_user(full_doc.replace(" " * 8, " " * 2))
+				return
+		help_message = "Wrapper Commands Help Reference"
+		help_message += "\n" + "Use the form /<command> to send commands to the wrapper."
+		help_message += "\n" + "Use /help [command] to get detailed help on that command."
 		help_message += "\n" + "Existing Commands:"
 		# Generate command list using docstrings.
 		for command, func in self.wrapper_commands.items():
-			documentation = func.__doc__ if func.__doc__ else ""
+			documentation = func.__doc__.split("\n", 1)[0] if func.__doc__ else ""
 			delimiter = " - " if not documentation == "" else ""
 			help_message += "\n  " + f"{command}{delimiter}{documentation}"
 		self.message_user(help_message)
@@ -336,7 +343,19 @@ class GUI(tkinter.Tk):
 		self.stop_server(post_stop=restart_program)
 
 	def wrapcom_update(self, component = "", *args):
-		"""Access updater. Use update help for details."""
+		"""Updates components. See detailed help for usage.
+		
+		The /update command gives access to updaters for various functions.
+		Currently, it has the following usages:
+			update server [keep|overwrite] [locale] - Update the server program.
+				[keep|overwrite] - Defaults to keep. If set to overwrite, server settings will not be preserved.
+				[locale] - Locale used to access minecraft website. Defaults to en-us.
+					Visit https://minecraft.net/download to check your locale.
+					It should redirect you to the site with locale listed as follows:
+						https://minecraft.net/{locale}/download
+			update wrapper [branch] - Update the wrapper program.
+				[branch] - GitHub branch to use. Defaults to master.
+		"""
 		if component == "server":
 			overwrite = (args[0] == "overwrite") if len(args) >= 1 else False
 			locale = (args[1]) if len(args) >= 2 else "en-us"
@@ -346,13 +365,7 @@ class GUI(tkinter.Tk):
 			updater = WrapperUpdater(branch=branch)
 			restart_wrapper = True
 		else:
-			update_help_message = "Gives access to update functions."
-			update_help_message += "\n  " + "update server [keep|overwrite] [locale] - Update the server program."
-			update_help_message += "\n    " + "[keep|overwrite] - Defaults to keep. If set to overwrite, server settings will not be preserved."
-			update_help_message += "\n    " + "[locale] - Locale used to access minecraft website. Defaults to en-us. https://minecraft.net/{locale}/download"
-			update_help_message += "\n  " + "update wrapper [branch] - Update the wrapper program."
-			update_help_message += "\n    " + "[branch] - GitHub branch to use. Defaults to master."
-			self.message_user(update_help_message)
+			self.wrapcom_help(command="update")
 			return
 		if self.server_instance and self.server_instance.is_running():
 			self.message_user("Server is running. Please stop server before updating.")
