@@ -50,7 +50,11 @@ class GUI(tkinter.Tk):
 		self.config(menu=menu)
 
 		file_menu = tkinter.Menu(menu)
-		file_menu.add_command(label="Exit", command=exit)
+		file_menu.add_command(label="View Folder", command=self.wrapcom_view)
+		exit_submenu = tkinter.Menu(file_menu)
+		exit_submenu.add_command(label="Exit", command=self.wrapcom_exit)
+		exit_submenu.add_command(label = "Force Exit", command = exit)
+		file_menu.add_cascade(label = "Exit", menu = exit_submenu)
 		menu.add_cascade(label="File", menu=file_menu)
 
 		update_menu = tkinter.Menu(menu)
@@ -298,6 +302,7 @@ class GUI(tkinter.Tk):
 	# --------------------------- #
 
 	def make_command_lookup(self):
+		"""Creates regex pattern and function lookup table for wrapper commands."""
 		self.meta_pattern = re.compile(R"^/(?P<command>\S+)\s?(?P<arguments>.+)?")
 		self.wrapper_commands = {
 			"help": self.wrapcom_help,
