@@ -2,6 +2,7 @@ from pathlib import Path
 import os, sys, shutil
 import re, subprocess
 from contextlib import contextmanager
+from threading import Lock
 
 import tkinter
 from tkinter.scrolledtext import ScrolledText
@@ -39,6 +40,7 @@ class GUI(tkinter.Tk):
 		self.exec_name = self.default_exec_name if exec_name is None else exec_name
 		self.autoscroll_log = True # Might make this setting edit-able later.
 		
+		self.locks = Locks()
 		self.log_listeners = set()
 		self.make_command_lookup()
 		self.protocol("WM_DELETE_WINDOW", self.wrapcom_exit)
@@ -165,9 +167,14 @@ class GUI(tkinter.Tk):
 	def backup_world(self, backup_location = "backups", add_timestamp = True):
 		POLLING_INTERVAL = 100 # Time in ms.
 		save_path = Path(backup_location)
+		this_lock = self.locks.backup
+		if not this_lock.acquire(False):
+			# Stop if lock cannot be acquired.
+			return
 		if not os.path.exists(save_path):
 			os.makedirs(save_path)
 		if self.server_instance and self.server_instance.is_running():
+			self.message_user("Starting live backup.")
 			listener = BackupListener(save_path, add_timestamp)
 			self.add_listener(listener)
 			self.send_input("save hold")
@@ -180,24 +187,32 @@ class GUI(tkinter.Tk):
 				if listener.finished:
 					self.send_input("save resume")
 					self.remove_listener(listener)
+					this_lock.release()
 				else:
 					self.after(POLLING_INTERVAL, finish_loop)
 			
 			def query_loop():
-				self.send_input("save query")
-				if listener.backup_ready:
+				if listener.finished or listener.internal_lock.locked():
 					self.after(POLLING_INTERVAL, finish_loop)
 				else:
+					self.send_input("save query")
 					self.after(POLLING_INTERVAL, query_loop)
 			
 			self.after(POLLING_INTERVAL, query_loop)
 		else:
+			self.message_user("Starting backup.")
 			worldpath = Path(self.server_dir) / "worlds"
+			timestamp = make_timestamp() + " " if add_timestamp else ""
 			with os.scandir(worldpath) as iterator:
 				for entry in iterator:
 					if entry.is_dir():
 						worldname = entry.name
-						shutil.copytree(worldpath / worldname, Path(backup_location) / f"{make_timestamp()} {worldname}")
+						try:
+							shutil.copytree(worldpath / worldname, Path(backup_location) / f"{timestamp}{worldname}")
+						except FileExistsError:
+							self.message_user(f"Backup of {worldname} on {timestamp}already exists.")
+			self.message_user("Backup process completed.")
+			this_lock.release()
 
 	def clear_textbox(self, textbox):
 		"""Clears a textbox."""
@@ -235,6 +250,9 @@ class GUI(tkinter.Tk):
 		# This is a really ugly function.
 		MAX_WAIT_DEPTH = 15 # Maximum number of WAIT_INTERVAL to wait.
 		WAIT_INTERVAL = 1000 # In ms.
+		this_lock = self.locks.stop
+		if not this_lock.acquire(False):
+			return
 		if self.server_instance and self.server_instance.is_running():
 			self.message_user("Stopping server.")
 			self.send_input("stop")
@@ -242,6 +260,7 @@ class GUI(tkinter.Tk):
 			def pause(action, depth, *args):
 				if depth > MAX_WAIT_DEPTH:
 					self.message_user("Server did not stop in time. Cancelling action.")
+					this_lock.release()
 					return
 				if self.server_instance and self.server_instance.is_running():
 					# Go another level.
@@ -249,10 +268,12 @@ class GUI(tkinter.Tk):
 					self.after(WAIT_INTERVAL, pause, action, depth + 1, *args)
 				else:
 					self.message_user("Server stop confirmed.")
+					this_lock.release()
 					action(*args)
 			if post_stop:
 				self.after(WAIT_INTERVAL, pause, post_stop, 0, *args)
 		else:
+			this_lock.release()
 			if post_stop:
 				post_stop(*args)
 
@@ -349,6 +370,17 @@ class GUI(tkinter.Tk):
 			subprocess.Popen(["xdg-open", self.server_dir])
 		else:
 			raise Exception("Unsupported platform.")
+
+class Locks():
+	def __init__(self):
+		self.lock_dict = {}
+
+	def __getattr__(self, name):
+		if name in self.lock_dict:
+			return self.lock_dict[name]
+		else:
+			self.lock_dict[name] = Lock()
+			return self.lock_dict[name]
 
 @contextmanager
 def output_redirector(output_handler):
