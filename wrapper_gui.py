@@ -59,8 +59,8 @@ class GUI(tkinter.Tk):
 		menu.add_cascade(label="File", menu=file_menu)
 
 		update_menu = tkinter.Menu(menu)
-		update_menu.add_command(label="Update Server", command=lambda event: self.wrapcom_update("server"))
-		update_menu.add_command(label="Update Wrapper", command=lambda event: self.wrapcom_update("wrapper"))
+		update_menu.add_command(label="Update Server", command=lambda: self.wrapcom_update("server"))
+		update_menu.add_command(label="Update Wrapper", command=lambda: self.wrapcom_update("wrapper"))
 		menu.add_cascade(label="Update", menu=update_menu)
 
 	def __make_left(self):
