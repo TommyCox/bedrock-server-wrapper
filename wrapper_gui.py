@@ -360,6 +360,7 @@ class GUI(tkinter.Tk):
 			overwrite = (args[0] == "overwrite") if len(args) >= 1 else False
 			locale = (args[1]) if len(args) >= 2 else "en-us"
 			updater = ServerUpdater(self.server_dir, overwrite, locale)
+			restart_wrapper = False
 		elif component == "wrapper":
 			branch = args[0] if len(args) >= 1 else "master"
 			updater = WrapperUpdater(branch=branch)
