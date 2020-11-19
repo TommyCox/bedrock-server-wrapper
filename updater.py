@@ -97,19 +97,21 @@ class ServerUpdater(Updater):
                     version = ver_file.read()
                     if (version == new_version):
                         print(f"New Version ({new_version}) is the same as Current Version.")
-                    return True
+                        return True
             except FileNotFoundError:
                 pass
-        with open(version_file_path, "w") as ver_file:
-            ver_file.write(new_version)
         # Connect to download link.
         connection = self.connect()
         if connection is None:
+            print("Error connecting to download link.")
             return False
         # Download & extract files.
         with tempfile.TemporaryFile() as newfile:
             connection.download_to(newfile)
             self.unzip(newfile)
+        with open(version_file_path, "w") as ver_file:
+            print("Writing new version number.")
+            ver_file.write(new_version)
         # TODO: Support renaming executable if name was changed?
         return True
 
