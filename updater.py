@@ -139,7 +139,10 @@ class WrapperUpdater(Updater):
             #TODO: Do version checking, checksums, or whatever here.
             self.unzip(newfile)
         # Erase pycache.
-        shutil.rmtree(self.destination_dir / "__pycache__")
+        try:
+            shutil.rmtree(self.destination_dir / "__pycache__")
+        except FileNotFoundError as error:
+            print(f"Failed to remove pycache:\n\t{error}")
         return True
 
 if __name__ == "__main__":
