@@ -1,3 +1,5 @@
 minecraft_server
+backups
 *_temp.py
+*_temp.txt
 __pycache__
