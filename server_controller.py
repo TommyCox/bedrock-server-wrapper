@@ -9,6 +9,7 @@ class BDS_Wrapper(subprocess.Popen):
 			stdin = subprocess.PIPE,
 			stdout = subprocess.PIPE,
 			stderr = subprocess.PIPE,
+			creationflags = subprocess.CREATE_NO_WINDOW,
 			**kwargs
 		)
 
